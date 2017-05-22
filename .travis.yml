@@ -1,0 +1,131 @@
+---
+# 
+dist: trusty # Ubuntu LTS 14.04
+sudo: false  # "false" -> use ec2/docker (faster?), "required" -> use gce/virt (slower?)  
+#
+cache: # speed up build
+  apt: true
+  directories: 
+    - $HOME/.arduino15 # arduino boards
+    - $HOME/install # arduino ide download
+#
+env:
+    global:
+      # arduino installer
+      - arduino_host=http://downloads-01.arduino.cc
+      - arduino_version=1.8.2
+      # source repository
+      - makaira_code=$TRAVIS_BUILD_DIR
+      - makaira_repo=$HOME/makaira-repo
+      - makaira_repo_days=60 # or MAKAIRA_REPO_DAYS in travis settings
+      # github repo cleaner https://rtyley.github.io/bfg-repo-cleaner/
+      - bfg_version=1.12.15
+      - bfg_archive=$HOME/install/bfg.jar
+      - bfg_command="java -jar $bfg_archive"
+      - bfg_download="http://repo1.maven.org/maven2/com/madgag/bfg/${bfg_version}/bfg-${bfg_version}.jar"
+#
+language: c
+#
+notifications:
+  email: false
+#
+before_install:
+  #
+  # Publish the buildroot script folder
+  - chmod +x $makaira_code/buildroot/bin/*
+  - ln -v -s $makaira_code/buildroot/bin/ ~/bin
+  #
+  # Start X server for arduino ide
+  - "/sbin/start-stop-daemon --start --quiet --pidfile /tmp/custom_xvfb_1.pid --make-pidfile --background --exec /usr/bin/Xvfb -- :1 -ac -screen 0 1280x1024x16"
+  - export DISPLAY=:1.0
+  #
+  # Provide makaira-repo key
+  - repo_key.sh
+  
+#
+install:
+  #
+  # Arduino core and libraries locations
+  - mkdir -p $HOME/install $HOME/libraries
+  #
+  # Install github repo cleaner
+  - cd $HOME/install
+  - wget -N $bfg_download -O "$bfg_archive"
+  #
+  # Install arduino ide
+  - cd $HOME/install
+  - wget -N ${arduino_host}/arduino-${arduino_version}-linux64.tar.xz
+  - tar xf arduino-${arduino_version}-linux64.tar.xz
+  - rm -rf arduino
+  - mv -f arduino-${arduino_version} arduino
+  - ln -s $HOME/install/arduino/arduino $makaira_code/buildroot/bin/arduino
+  #
+  # Install boards family
+  - cd $HOME
+  - arduino --install-boards "arduino:avr"
+  #
+  # Install: libraries clone location
+  - cd $HOME/libraries
+  #
+  # Install: LiquidCrystal_I2C library
+  - git clone https://github.com/kiyoshigawa/LiquidCrystal_I2C.git
+  - mv -f $HOME/libraries/LiquidCrystal_I2C/LiquidCrystal_I2C $HOME/install/arduino/libraries/LiquidCrystal_I2C
+  #
+  # Install: LiquidTWI2 library
+  - git clone https://github.com/lincomatic/LiquidTWI2.git
+  - mv -f $HOME/libraries/LiquidTWI2 $HOME/install/arduino/libraries/LiquidTWI2
+  #
+  # Install: Monochrome Graphics Library for LCDs and OLEDs
+  - git clone https://github.com/olikraus/U8glib_Arduino.git
+  - mv -f $HOME/libraries/U8glib_Arduino $HOME/install/arduino/libraries/U8glib
+  #
+  # Install: L6470 Stepper Motor Driver library
+  - git clone https://github.com/ameyer/Arduino-L6470.git
+  - mv -f $HOME/libraries/Arduino-L6470/L6470 $HOME/install/arduino/libraries/L6470
+  #
+  # Install: TMC26X Stepper Motor Controller library
+  - git clone https://github.com/trinamic/TMC26XStepper.git
+  - mv -f $HOME/libraries/TMC26XStepper $HOME/install/arduino/libraries/TMC26XStepper
+  #
+  # Install: TMC2130 Stepper Motor Controller library
+  - git clone https://github.com/teemuatlut/TMC2130Stepper.git
+  - mv -f $HOME/libraries/TMC2130Stepper $HOME/install/arduino/libraries/TMC2130Stepper
+  #
+  # Install: library report
+  - ls -las $HOME/install/arduino/libraries
+  #
+  # Install: Marlin Master
+  - git clone https://github.com/MarlinFirmware/Marlin.git
+  - ln -s $HOME/libraries/Marlin/Marlin $TRAVIS_BUILD_DIR/Marlin
+  
+before_script:
+  #
+  # Expire obsolete firmware
+  - repo_rotate.sh
+  #
+  # Generate custom version header
+  - cd $makaira_code
+  - ls -las
+  - generate_version_header.sh $makaira_code/Marlin
+  - cat $makaira_code/Marlin/_Version.h
+  #
+  - repo_pull.sh
+  #
+script:
+  #
+  #####################################
+  ######## Custom Builds ##############
+  #####################################
+  #
+  - custom_build.sh A-vendor/A-model/A-flavor # default marlin build
+#  - custom_build.sh Wanhao/Duplicator-6/Basic # default model support
+#  - custom_build.sh Wanhao/Duplicator-6/Level # automatic bed leveling
+  #
+  #####################################
+  ######## Custom Builds ##############
+  #####################################
+  #
+after_script:
+  #
+  - repo_push.sh
+  #

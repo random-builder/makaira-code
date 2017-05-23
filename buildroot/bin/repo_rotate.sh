@@ -10,13 +10,18 @@ readonly repo="$HOME/makaira_repo_mirror"
 
 repo_expire() {
     #
-    local repo_days=90 # default
+    local repo_days=0
     if [[ "$MAKAIRA_REPO_DAYS" ]] ; then
+        echo "using MAKAIRA_REPO_DAYS"
         repo_days="$MAKIARA_REPO_DAYS"
     elif [[ "$makaira_repo_days" ]] ; then
+        echo "using makaira_repo_days"
         repo_days="$makaira_repo_days"
+    else
+        echo "using default"
+        repo_days=90
     fi 
-    local expired=$(date --date="-$repo_days days" "+%Y-%m-%d")
+    local expired=$(date --date="-${repo_days} days" "+%Y-%m-%d")
     local pattern="*${expired}.hex.zip"
     echo "pattern=$pattern"
     #
